@@ -1,0 +1,39 @@
+body {
+    font-family: sans-serif;
+    font-size: 11pt;
+}
+
+.highlight {
+    fill: #f00;
+    stroke: #000;
+}
+
+path.state-boundary {
+    stroke: #000;
+    stroke-width: .5px;
+}
+
+rect {
+    fill: #ddd;
+    stroke: #000;
+    stroke-width: .5px;
+}
+
+.bar rect.highlight {
+    fill: #f00;
+    stroke: #000;
+    stroke-width: .5px;
+}
+
+.bar text {
+    font-size: 9pt;
+}
+
+#brushed svg {
+    padding: 10px;
+}
+
+.x.axis text {
+    transform: translate(-12px, 10px) rotate(-90deg);
+    text-anchor: end;
+}
