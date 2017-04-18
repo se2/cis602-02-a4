@@ -1,6 +1,5 @@
 function extractJobsPct(jobData, year, occCode, number) {
-    var res = jobData.filter(
-        function(d) {
+    var res = jobData.filter(function(d) {
             return ((year == null || d.year == year) &&
                 (occCode == null || d.occ_code == occCode));
         });
@@ -31,6 +30,7 @@ function createBars(divId, jobData, year, occCode) {
             "translate(" + barMargin.left + "," + barMargin.top + ")")
 
     var csData = extractJobsPct(jobData, year, occCode, 18);
+    // console.log(csData);
 
     barX.range([0, barW])
         .domain(csData.map(function(d) {
@@ -86,38 +86,42 @@ function updateBars(divId, jobData, year) {
 }
 
 function getStateRankings(jobData, occCode) {
-    // TODO: compute the state rankings for the given occCode
 
-    // TODO: remove this statically encoded solution that only works for code "15-0000"
-    return {
-    	"Alabama": 16, "Alaska": 18,
-    	"Arizona": 12, "Arkansas": 15,
-    	"California": 10, "Colorado": 9,
-    	"Connecticut": 14, "Delaware": 10,
-    	"District of Columbia": 4, "Florida": 15,
-    	"Georgia": 11, "Hawaii": 17, "Idaho": 14,
-    	"Illinois": 10, "Indiana": 15, "Iowa": 14,
-    	"Kansas": 14, "Kentucky": 15, "Louisiana": 17,
-    	"Maine": 15, "Maryland": 8, "Massachusetts": 9,
-    	"Michigan": 15, "Minnesota": 11, "Mississippi": 17,
-    	"Missouri": 13, "Montana": 16, "Nebraska": 12,
-    	"Nevada": 16, "New Hampshire": 13, "New Jersey": 10,
-    	"New Mexico": 16, "New York": 15, "North Carolina": 13,
-    	"North Dakota": 14, "Ohio": 13, "Oklahoma": 15,
-    	"Oregon": 13, "Pennsylvania": 14, "Rhode Island": 13,
-    	"South Carolina": 16, "South Dakota": 14, "Tennessee": 15,
-    	"Texas": 12, "Utah": 11, "Vermont": 14, "Virginia": 7,
-    	"Washington": 9, "West Virginia": 16, "Wisconsin": 13, "Wyoming": 19
-    };
+    // TODO: compute the state rankings for the given occCode
+    var stateRankings = {};
+    // filter by occ_code
+    var jobDataByCode = jobData.filter(function(d) {
+    	return (d.occ_code == occCode);
+    });
+
+    _.each(jobDataByCode, function(d) {
+    	// jobs for each state
+	    jobDataByState = jobData.filter(function(s) {
+	    	return (s.area_title == d.area_title);
+	    });
+
+	    jobDataByState = jobDataByState.sort(function(a, b) {
+	    	return d3.descending(+a.tot_emp, +b.tot_emp);
+	    });
+
+	    var ranking = jobDataByState.map(function(x) {return x.occ_code; }).indexOf(d.occ_code);
+
+	    stateRankings[d.area_title] = ranking;
+
+    });
+
+    return stateRankings;
 }
 
 function createBrushedVis(divId, usMap, jobData, year) {
-    var jobData = jobData.filter(
-        function(d) {
-            return (+d.year == year); });
+
+    var jobData = jobData.filter(function(d) {
+    	return (+d.year == year);
+    });
 
     var width = 600,
-        height = 400;
+        height = 400,
+        occCode = "15-0000";
 
     var svg = d3.select(divId).append("svg")
         .attr("width", width)
@@ -132,7 +136,7 @@ function createBrushedVis(divId, usMap, jobData, year) {
     var path = d3.geoPath()
         .projection(projection);
 
-    var rankings = getStateRankings(jobData, "15-0000");
+    var rankings = getStateRankings(jobData, occCode);
     var color = d3.scaleSequential(d3.interpolateViridis).domain([22, 0]);
 
     svg.append("g")
@@ -171,21 +175,23 @@ function createBrushedVis(divId, usMap, jobData, year) {
         .attr("height", bHeight)
         .style("vertical-align", "bottom")
 
-    var y = d3.scaleBand().padding(0.1).range([0, bHeight]).domain(allJobs.map(function(d) {
-        return d.values[0].key; }));
-    var x = d3.scaleLinear().range([0, bWidth - midX]).domain([0, d3.max(allJobs, function(d) {
-        return d.values[0].value; })]);
+    var y = d3.scaleBand()
+    		.padding(0.1)
+    		.range([0, bHeight])
+    		.domain(allJobs.map(function(d) {
+        		return d.values[0].key;
+        	}));
+    var x = d3.scaleLinear()
+    		.range([0, bWidth - midX])
+    		.domain([0, d3.max(allJobs, function(d) {return d.values[0].value; })]);
 
-    var bars = barSvg.selectAll(".bar").data(allJobs)
+    var bars = barSvg.selectAll(".bar")
+    	.data(allJobs)
         .enter().append("g")
         .attr("transform",
             function(d) {
                 return "translate(0," + y(d.values[0].key) + ")"; })
-        .attr("class", "bar")
-
-    function jobMouseEnter() {
-        // TODO: add code here
-    }
+        .attr("class", "bar");
 
     bars.append("rect")
         .attr("x", midX)
@@ -194,7 +200,7 @@ function createBrushedVis(divId, usMap, jobData, year) {
             return x(d.values[0].value); })
         .attr("height", y.bandwidth())
         .classed("highlight", function(d) {
-            return d.key == '15-0000'; })
+            return d.key == occCode; })
         .on("mouseover", jobMouseEnter)
 
     bars.append("text")
@@ -208,21 +214,36 @@ function createBrushedVis(divId, usMap, jobData, year) {
             }
             return label;
         });
+
+
+    function jobMouseEnter() {
+        // TODO: add code here
+        // Update highlighted bar
+        d3.select(".bar .highlight").classed("highlight", false);
+        d3.select(this).classed("highlight", true);
+        // Update colormap
+        var occCode = d3.select(this).datum().key;
+        var rankings = getStateRankings(jobData, occCode);
+
+        svg.selectAll("path")
+            .attr("fill", function(d) {
+                    return color(rankings[d.properties.name]);
+            	})
+    }
+
 }
 
 function processData(errors, usMap, jobsData) {
-    console.log("Errors", errors)
+    // console.log("Errors", errors)
     createBars("#bars", jobsData, 2012, "15-0000");
+    // var csData = extractJobsPct(jobsData, 2016, "15-0000", 18);
+    // console.log(csData);
     updateBars("#bars", jobsData, 2016);
 
     createBrushedVis("#brushed", usMap, jobsData, 2016);
 }
 
 d3.queue()
-    // use these two files
-    // .defer(d3.json, "http://www.cis.umassd.edu/~dkoop/dsc530-2017sp/a4/us-states.json")
-    // .defer(d3.csv, "http://www.cis.umassd.edu/~dkoop/dsc530-2017sp/a4/occupations.csv")
-    // or these HTTPS versions
     .defer(d3.json, "https://cdn.rawgit.com/dakoop/69d42ee809c9e7985a2ff7ac77720656/raw/6707c376cfcd68a71f59f60c3f4569277f20b7cf/us-states.json")
     .defer(d3.csv, "https://cdn.rawgit.com/dakoop/69d42ee809c9e7985a2ff7ac77720656/raw/6707c376cfcd68a71f59f60c3f4569277f20b7cf/occupations.csv")
     .await(processData);

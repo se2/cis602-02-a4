@@ -17,6 +17,7 @@ rect {
     fill: #ddd;
     stroke: #000;
     stroke-width: .5px;
+    cursor: pointer;
 }
 
 .bar rect.highlight {
