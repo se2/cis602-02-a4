@@ -20,6 +20,11 @@ var barW = 500,
     barY = d3.scaleLinear(),
     barXAxis = null;
 
+var currentOcc = "15-0000",
+	currentState = "Massachusetts";
+
+var yLine = d3.scaleLinear().range([barH, 0]);
+
 function createBars(divId, jobData, year, occCode) {
     var svg = d3.select(divId).append("svg")
         .attr("width", barW + barMargin.left + barMargin.right)
@@ -73,6 +78,7 @@ function createBars(divId, jobData, year, occCode) {
     svg.append("text")
         .attr("x", barW / 2)
         .attr("y", barH + 115)
+        .style("text-anchor", "middle")
         .text("State")
 }
 
@@ -134,7 +140,144 @@ function updateBars(divId, jobData, year, occCode) {
 		.duration(time)
 		.delay(time)
 			.call(barXAxis);
+}
 
+function createLine(divId, jobData, occCode, state) {
+
+	var lineChartData = getLineChartData(jobData);
+	console.log(lineChartData);
+
+	/* scale x and y */
+	var x = d3.scaleBand().rangeRound([0, barW]).padding(20),
+	    y = d3.scaleLinear().range([barH, 0]);
+
+	/* domain data for x and y */
+	x.domain(lineChartData.map(function(d) { return d.key; }));
+	y.domain([0, d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2]);
+	// y.domain([0, d3.max(lineChartData, function(d) { return _.sum(_.values(d.values[occCode])); }) * 1.2]);
+
+	var xAxis = d3.axisBottom(x);
+
+	var yAxis = d3.axisLeft(y)
+	                .ticks(10)
+	                .tickFormat(d3.formatPrefix(".0", 1e3));
+
+	var chart = d3.select(divId)
+	                .append("svg")
+	                .attr("width", barW + barMargin.left + barMargin.right)
+	                .attr("height", barH + barMargin.top + barMargin.bottom)
+	                .append("g")
+	                .attr("class", "main")
+	                .attr("transform",
+	                    "translate(" + barMargin.left + "," + barMargin.top + ")");
+
+	/* draw line chart */
+	var line = d3.line()
+				.x(function(d) { return x(d.key); })
+				.y(function(d) { return y(d.values[occCode][state]); });
+				// .y(function(d) { return y(_.sum(_.values(d.values[occCode]))); });
+
+	var path = chart.append("path")
+					.datum(lineChartData)
+					.attr("fill", "transparent")
+					.attr("stroke", "#7BA1C2")
+					.attr("stroke-width", 1.5)
+					.attr("d", line);
+
+	/* append x axis, transform it to bottom */
+	chart.append("g")
+	        .attr("transform", "translate(0," + barH + ")")
+	        .call(xAxis);
+
+	/* append y axis */
+	chart.append("g")
+	        .call(yAxis);
+
+    chart.append("g")
+        .attr("transform", "translate(-50," + (barH / 2) + ") rotate(-90)")
+        .append("text")
+        .style("text-anchor", "middle")
+        .text("Total Employment");
+
+    chart.append("text")
+        .attr("x", barW / 2)
+        .attr("y", barH + 50)
+        .style("text-anchor", "middle")
+        .text("Year");
+}
+
+/* update line chart function */
+function updateLineChart(divId, jobData, occCode, state) {
+
+	var chart = d3.select(divId);
+
+	var lineChartData = getLineChartData(jobData);
+
+	/* scale x and y */
+	var x = d3.scaleBand().rangeRound([0, barW]).padding(20),
+	    y = d3.scaleLinear().range([barH, 0]);
+
+	/* domain data for x and y */
+	x.domain(lineChartData.map(function(d) { return d.key; }));
+	y.domain([0, d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2]);
+	// y.domain([0, d3.max(lineChartData, function(d) { return _.sum(_.values(d.values[occCode])); }) * 1.2]);
+
+	/* update line with new data */
+	var line = d3.line()
+				.x(function(d) { return x(d.key); })
+				.y(function(d) { return y(d.values[occCode][state]); });
+				// .y(function(d) { return y(_.sum(_.values(d.values[occCode]))); });
+
+	/* re-draw line with new data */
+	chart.select("path")
+			.transition()
+			.duration(250)
+            .attr("d", line);
+}
+
+function getLineChartData(jobData) {
+
+	var years = _.uniq(_.map(jobData, "year"));
+	var lineChartData = [];
+
+	_.each(years, function(y) {
+
+		var jobDataByYear = jobData.filter(function(d) {
+			return (d.year == y);
+		});
+
+		var totalEmpByYear = d3.nest()
+		    .key(function(d) {
+		        return d.year; })
+		    .key(function(d) {
+		        return d.occ_code; })
+		    .key(function(d) {
+		        return d["area_title"]; })
+		    .rollup(function(v) {
+		        return v.reduce(function(s, d) {
+		            if (!+d.tot_emp) {
+		                return s; }
+		            return s + +d.tot_emp;
+		        }, 0);
+		    })
+		    .entries(jobDataByYear)
+		    .sort(function(a, b) {
+		        return d3.descending(+a.values[0].value, +b.values[0].value); });
+
+		lineChartData.push(totalEmpByYear[0]);
+
+	});
+
+	_.each(lineChartData, function(d) {
+		_.each(d.values, function(v) {
+			var allJobs = _.mapValues(_.keyBy(v.values, 'key'), 'value');
+			v.values = allJobs;
+		})
+		var allStates = _.mapValues(_.keyBy(d.values, 'key'), 'values');
+		d.values = allStates;
+	});
+
+	return lineChartData;
 }
 
 function getStateRankings(jobData, occCode) {
@@ -167,6 +310,8 @@ function getStateRankings(jobData, occCode) {
 
 function createBrushedVis(divId, usMap, jobData, year) {
 
+	var originJobData = jobData;
+
     var jobData = jobData.filter(function(d) {
     	return (+d.year == year);
     });
@@ -176,6 +321,7 @@ function createBrushedVis(divId, usMap, jobData, year) {
         occCode = "15-0000";
 
     var svg = d3.select(divId).append("svg")
+    	.attr("class", "us-map")
         .attr("width", width)
         .attr("height", height);
 
@@ -200,7 +346,12 @@ function createBrushedVis(divId, usMap, jobData, year) {
             function(d) {
                 return color(rankings[d.properties.name]); })
         .attr("class", "state-boundary")
-        .classed("highlight", false)
+        .classed("highlight-state", false)
+        .on("mouseover", stateMouseEnter)
+        .on("mouseout", removeHighLight)
+        .attr("data-state", function(d) { return d.properties.name; })
+        .append('title')
+        	.text(function(d) { return d.properties.name; })
 
     var bWidth = 400,
         bHeight = 400,
@@ -253,7 +404,7 @@ function createBrushedVis(divId, usMap, jobData, year) {
         .attr("height", y.bandwidth())
         .classed("highlight", function(d) {
             return d.key == occCode; })
-        .on("mouseover", jobMouseEnter)
+        .on("mouseover", jobMouseEnter);
 
     bars.append("text")
         .attr("x", midX - 4)
@@ -273,16 +424,35 @@ function createBrushedVis(divId, usMap, jobData, year) {
         // Update highlighted bar
         d3.select(".bar .highlight").classed("highlight", false);
         d3.select(this).classed("highlight", true);
-        // Update colormap
+
         var occCode = d3.select(this).datum().key;
         var rankings = getStateRankings(jobData, occCode);
+        currentOcc = occCode;
 
+        // Update colormap
         svg.selectAll("path")
             .attr("fill", function(d) {
                     return color(rankings[d.properties.name]);
             	})
+        // update line chart
+        updateLineChart("#line", originJobData, occCode, currentState);
     }
 
+    function stateMouseEnter() {
+    	var currentColor = d3.select(this).attr("fill");
+    	console.log(currentColor);
+    	currentState = d3.select(this).attr("data-state");
+    	d3.select(".us-map .highlight-state").classed("highlight-state", false);
+    	d3.select(this).classed("highlight-state", true);
+    	// update line chart
+        updateLineChart("#line", originJobData, currentOcc, currentState);
+    }
+
+    function removeHighLight() {
+    	d3.select(this).classed("highlight-state", false);
+    }
+
+    createLine("#line", originJobData, currentOcc, currentState);
 }
 
 function processData(errors, usMap, jobsData) {
