@@ -30,7 +30,6 @@ function createBars(divId, jobData, year, occCode) {
             "translate(" + barMargin.left + "," + barMargin.top + ")")
 
     var csData = extractJobsPct(jobData, year, occCode, 18);
-    // console.log(csData);
 
     barX.range([0, barW])
         .domain(csData.map(function(d) {
@@ -77,11 +76,64 @@ function createBars(divId, jobData, year, occCode) {
         .text("State")
 }
 
-function updateBars(divId, jobData, year) {
+function updateBars(divId, jobData, year, occCode) {
     // write code to update the bar chart created to the specified year
     // you should use two transitions, one to update the bar values
     // and the other to reorder the bars
     // Make sure to transition the axes, too!
+    var csData = extractJobsPct(jobData, year, occCode, 18);
+	var svg = d3.select(divId).select("svg");
+	var time = 1200;
+
+	var bars = svg.select("g")
+					.selectAll("rect")
+					.style("fill", "steelblue")
+					.data(csData, function(d) { return d.area_title; });
+
+	barX.range([0, barW])
+	    .domain(csData.map(function(d) {
+	        return d.area_title; }));
+
+	bars.transition()
+		.duration(time)
+			.attr("y", function(d) {
+	            return barY(+d.jobs_1000); })
+	        .attr("height", function(d) {
+	        	return barH - barY(+d.jobs_1000); })
+	        .style("opacity", 1)
+	    .transition()
+	    .duration(time)
+	    	.attr("x", function(d) {
+			    return barX(d.area_title); });
+
+	bars.enter()
+		.append("rect")
+    		.attr("class", "bar")
+		   	.attr("x", function(d) { return barX(d.area_title); })
+		   	.attr("width", barX.bandwidth())
+		   	.attr("height", function(d) { return barH - barY(+d.jobs_1000); })
+		   	.attr("y", function(d) { return barY(+d.jobs_1000); })
+		    .style("fill", "steelblue")
+		    .style("opacity", 0)
+		.merge(bars)
+			.transition()
+			.duration(time)
+			.delay(time * 2)
+				.style("opacity", 1);
+
+	bars.exit()
+		.transition()
+		.duration(time)
+			.style("opacity", 0)
+			.remove();
+
+	barXAxis = d3.axisBottom(barX);
+
+	svg.select(".x.axis")
+		.transition()
+		.duration(time)
+		.delay(time)
+			.call(barXAxis);
 
 }
 
@@ -234,11 +286,9 @@ function createBrushedVis(divId, usMap, jobData, year) {
 }
 
 function processData(errors, usMap, jobsData) {
-    // console.log("Errors", errors)
+
     createBars("#bars", jobsData, 2012, "15-0000");
-    // var csData = extractJobsPct(jobsData, 2016, "15-0000", 18);
-    // console.log(csData);
-    updateBars("#bars", jobsData, 2016);
+    updateBars("#bars", jobsData, 2016, "15-0000");
 
     createBrushedVis("#brushed", usMap, jobsData, 2016);
 }
