@@ -15,8 +15,11 @@ path.state-boundary {
 }
 
 path.highlight-state {
-    // fill: rgba(252, 248, 227, 0.8);
     opacity: 0.5;
+}
+
+.hidden {
+    opacity: 0;
 }
 
 rect {

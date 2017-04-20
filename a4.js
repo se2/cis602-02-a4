@@ -145,7 +145,6 @@ function updateBars(divId, jobData, year, occCode) {
 function createLine(divId, jobData, occCode, state) {
 
 	var lineChartData = getLineChartData(jobData);
-	console.log(lineChartData);
 
 	/* scale x and y */
 	var x = d3.scaleBand().rangeRound([0, barW]).padding(20),
@@ -153,14 +152,15 @@ function createLine(divId, jobData, occCode, state) {
 
 	/* domain data for x and y */
 	x.domain(lineChartData.map(function(d) { return d.key; }));
-	y.domain([0, d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2]);
-	// y.domain([0, d3.max(lineChartData, function(d) { return _.sum(_.values(d.values[occCode])); }) * 1.2]);
+	y.domain([
+		d3.min(lineChartData, function(d) { return d.values[occCode][state]; }) / 2,
+		d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2
+		]);
 
 	var xAxis = d3.axisBottom(x);
 
 	var yAxis = d3.axisLeft(y)
-	                .ticks(10)
-	                .tickFormat(d3.formatPrefix(".0", 1e3));
+	                .ticks(10);
 
 	var chart = d3.select(divId)
 	                .append("svg")
@@ -175,7 +175,6 @@ function createLine(divId, jobData, occCode, state) {
 	var line = d3.line()
 				.x(function(d) { return x(d.key); })
 				.y(function(d) { return y(d.values[occCode][state]); });
-				// .y(function(d) { return y(_.sum(_.values(d.values[occCode]))); });
 
 	var path = chart.append("path")
 					.datum(lineChartData)
@@ -186,15 +185,17 @@ function createLine(divId, jobData, occCode, state) {
 
 	/* append x axis, transform it to bottom */
 	chart.append("g")
+			.attr("class", "line xAxis")
 	        .attr("transform", "translate(0," + barH + ")")
 	        .call(xAxis);
 
 	/* append y axis */
 	chart.append("g")
+			.attr("class", "line yAxis")
 	        .call(yAxis);
 
     chart.append("g")
-        .attr("transform", "translate(-50," + (barH / 2) + ") rotate(-90)")
+        .attr("transform", "translate(-70," + (barH / 2) + ") rotate(-90)")
         .append("text")
         .style("text-anchor", "middle")
         .text("Total Employment");
@@ -213,26 +214,37 @@ function updateLineChart(divId, jobData, occCode, state) {
 
 	var lineChartData = getLineChartData(jobData);
 
+	console.log(d3.min(lineChartData, function(d) { return d.values[occCode][state]; }) / 2);
+	console.log(d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2);
+
 	/* scale x and y */
 	var x = d3.scaleBand().rangeRound([0, barW]).padding(20),
 	    y = d3.scaleLinear().range([barH, 0]);
 
 	/* domain data for x and y */
 	x.domain(lineChartData.map(function(d) { return d.key; }));
-	y.domain([0, d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2]);
-	// y.domain([0, d3.max(lineChartData, function(d) { return _.sum(_.values(d.values[occCode])); }) * 1.2]);
+	y.domain([
+			d3.min(lineChartData, function(d) { return d.values[occCode][state]; }) / 2,
+			d3.max(lineChartData, function(d) { return d.values[occCode][state]; }) * 1.2
+		]);
+
+	var yAxis = d3.axisLeft(y)
+				.ticks(10);
 
 	/* update line with new data */
 	var line = d3.line()
 				.x(function(d) { return x(d.key); })
 				.y(function(d) { return y(d.values[occCode][state]); });
-				// .y(function(d) { return y(_.sum(_.values(d.values[occCode]))); });
 
 	/* re-draw line with new data */
 	chart.select("path")
 			.transition()
 			.duration(250)
             .attr("d", line);
+
+    var yAxisDOM = d3.select(divId).select(".line.yAxis");
+
+    yAxisDOM.call(yAxis);
 }
 
 function getLineChartData(jobData) {
@@ -347,8 +359,7 @@ function createBrushedVis(divId, usMap, jobData, year) {
                 return color(rankings[d.properties.name]); })
         .attr("class", "state-boundary")
         .classed("highlight-state", false)
-        .on("mouseover", stateMouseEnter)
-        .on("mouseout", removeHighLight)
+        .on("click", stateMouseEnter)
         .attr("data-state", function(d) { return d.properties.name; })
         .append('title')
         	.text(function(d) { return d.properties.name; })
@@ -423,7 +434,9 @@ function createBrushedVis(divId, usMap, jobData, year) {
         // TODO: add code here
         // Update highlighted bar
         d3.select(".bar .highlight").classed("highlight", false);
+        d3.select(".us-map .highlight-state").classed("highlight-state", false);
         d3.select(this).classed("highlight", true);
+        d3.select("#line").classed("hidden", true);
 
         var occCode = d3.select(this).datum().key;
         var rankings = getStateRankings(jobData, occCode);
@@ -433,23 +446,22 @@ function createBrushedVis(divId, usMap, jobData, year) {
         svg.selectAll("path")
             .attr("fill", function(d) {
                     return color(rankings[d.properties.name]);
-            	})
-        // update line chart
-        updateLineChart("#line", originJobData, occCode, currentState);
+            	});
     }
 
     function stateMouseEnter() {
-    	var currentColor = d3.select(this).attr("fill");
-    	console.log(currentColor);
     	currentState = d3.select(this).attr("data-state");
-    	d3.select(".us-map .highlight-state").classed("highlight-state", false);
-    	d3.select(this).classed("highlight-state", true);
-    	// update line chart
-        updateLineChart("#line", originJobData, currentOcc, currentState);
-    }
-
-    function removeHighLight() {
-    	d3.select(this).classed("highlight-state", false);
+    	if (d3.select(this).classed("highlight-state")) {
+    		// update highlighted elements
+			d3.select(this).classed("highlight-state", false);
+			d3.select("#line").classed("hidden", true);
+    	} else {
+			d3.select(".us-map .highlight-state").classed("highlight-state", false);
+			d3.select(this).classed("highlight-state", true);
+			// update line chart
+			d3.select("#line").classed("hidden", false);
+			updateLineChart("#line", originJobData, currentOcc, currentState);
+    	}
     }
 
     createLine("#line", originJobData, currentOcc, currentState);
